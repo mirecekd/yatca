@@ -2,7 +2,7 @@
 
 <div align="center">
 
-# 🦙
+<img src="yatca_ghcover.jpg" alt="YATCA" width="40%">
 
 </div>
 

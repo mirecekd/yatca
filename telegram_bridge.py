@@ -1,5 +1,5 @@
 """
-YATCA - Yet Another Telegram Connector A0
+YATCA — Yet Another Telegram Connector for Agent-zero
 Bridges Telegram messages to Agent Zero's /api_message HTTP API.
 
 Supported: text messages, photos, documents/files.
@@ -393,7 +393,7 @@ async def agent_reply(
 
 HELP_TEXT = (
     "🦙 <b>Welcome to YATCA</b>\n"
-    "<i>Yet Another Telegram Connector A0</i>\n\n"
+    "<i>Yet Another Telegram Connector for Agent-zero</i>\n\n"
     "Send me any message and I'll forward it to Agent Zero.\n"
     "Supported: text, photos, documents/files.\n\n"
     "<b>Commands:</b>\n"
@@ -841,7 +841,7 @@ if __name__ == "__main__":
         sys.exit(1)
 
     print("=" * 60)
-    print("  YATCA - Yet Another Telegram Connector A0")
+    print("  YATCA — Yet Another Telegram Connector for Agent-zero")
     print("=" * 60)
     print(f"  API URL:   {A0_API_URL}")
     print(f"  API Base:  {A0_API_BASE}")

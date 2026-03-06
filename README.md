@@ -188,25 +188,22 @@ telegram_bridge RUNNING pid 1234, uptime 0:00:05
 
 ## Architecture
 
-```mermaid
-flowchart LR
-    TG["Telegram<br/>(User)"] <-->|HTTPS| BR["YATCA Bridge<br/>(python-telegram-bot)"]
-    BR <-->|HTTP localhost| AZ["Agent Zero<br/>(Flask API)"]
+```
++-------------+         +------------------+         +-------------+
+|  Telegram   |  HTTPS  |   YATCA Bridge   |  HTTP   | Agent Zero  |
+|   (User)    |<------->| (python-tg-bot)  |<------->| (Flask API) |
++-------------+         +------------------+         +-------------+
+                                |
+                                |--- /api_message  (X-API-KEY auth)
+                                |--- /pause        (Session + CSRF)
+                                |--- /nudge        (Session + CSRF)
+                                |--- /ctx_window_get (Session + CSRF)
+                                +--- /scheduler_tasks_list (Session + CSRF)
 ```
 
-**API Endpoints used by the bridge:**
-
-| Endpoint | Auth method |
-|----------|-------------|
-| `/api_message` | API key (`X-API-KEY` header) |
-| `/pause` | Session + CSRF |
-| `/nudge` | Session + CSRF |
-| `/ctx_window_get` | Session + CSRF |
-| `/scheduler_tasks_list` | Session + CSRF |
-
 The bridge uses two authentication methods:
-- **`/api_message`** — API key authentication (`X-API-KEY` header)
-- **All other endpoints** — Full session authentication (login + CSRF token), managed automatically by `A0SessionManager`
+- **`/api_message`** -- API key authentication (`X-API-KEY` header)
+- **All other endpoints** -- Full session authentication (login + CSRF token), managed automatically by `A0SessionManager`
 
 ---
 

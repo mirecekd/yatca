@@ -235,3 +235,10 @@ If you find YATCA useful, consider buying me a coffee!
 [!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/mirecekdg)
 
 </div>
+
+## Credits
+
+YATCA was inspired by and built upon these projects:
+
+- [winboost/agent-zero-telegram-bridge](https://github.com/winboost/agent-zero-telegram-bridge) -- the original Telegram bridge for Agent Zero
+- [seqis/Agent Zero to Telegram Bridge](https://gist.github.com/seqis/69ba87a3d8c552b94b8a6bf9612b1c28) -- How-To guide for building an A0 Telegram bridge

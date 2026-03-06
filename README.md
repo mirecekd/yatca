@@ -46,6 +46,7 @@ A full-featured Telegram bot bridge for [Agent Zero](https://github.com/frdel/ag
 | `/nudge` | Kick the agent when stuck |
 | `/context` | Show context window info |
 | `/tasks` | List scheduled tasks (with Run buttons) |
+| `/project` | List and switch A0 projects |
 
 ---
 

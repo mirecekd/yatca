@@ -81,6 +81,7 @@ logging.basicConfig(
 log = logging.getLogger("telegram_bridge")
 
 chat_contexts: dict[str, str] = {}
+chat_projects: dict[str, str] = {}  # chat_id -> project_name
 
 
 def is_authorized(update: Update) -> bool:
@@ -302,9 +303,12 @@ async def send_to_agent(
     message_text: str,
     context_id: str = "",
     attachments: list[dict] | None = None,
+    project_name: str | None = None,
 ) -> dict:
     """Send a message (+ optional attachments) to Agent Zero. Fresh API key every call."""
     payload: dict = {"message": message_text, "context_id": context_id}
+    if project_name:
+        payload["project_name"] = project_name
     if attachments:
         payload["attachments"] = attachments
     api_key = get_a0_api_key()
@@ -342,6 +346,7 @@ async def agent_reply(
         f"[{user_display}] -> Agent Zero: "
         f"{message_text[:100]}{'...' if len(message_text) > 100 else ''}{att_info}"
     )
+    project = chat_projects.get(chat_id)
     typing_active = True
     async def keep_typing():
         while typing_active:
@@ -354,7 +359,7 @@ async def agent_reply(
     await update.effective_chat.send_action(ChatAction.TYPING)
     typing_task = asyncio.create_task(keep_typing())
     try:
-        data = await send_to_agent(message_text, context_id, attachments)
+        data = await send_to_agent(message_text, context_id, attachments, project_name=project)
     finally:
         typing_active = False
         typing_task.cancel()
@@ -401,7 +406,8 @@ HELP_TEXT = (
     "/resume — Resume a paused agent\n"
     "/nudge — Kick the agent when stuck\n"
     "/context — Show context window info\n"
-    "/tasks — List scheduled tasks"
+    "/tasks — List scheduled tasks\n"
+    "/project — Switch A0 project"
 )
 
 
@@ -656,6 +662,92 @@ async def callback_task_run(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ---------------------------------------------------------------------------
+#  Project switching: /project command + inline keyboard callback
+# ---------------------------------------------------------------------------
+
+async def cmd_project(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Show current project and list available projects as inline keyboard."""
+    if not is_authorized(update):
+        return
+    chat_id = str(update.effective_chat.id)
+    current = chat_projects.get(chat_id)
+    try:
+        data = await a0_api_call("projects", {"action": "list"})
+        projects = data.get("data", [])
+
+        if current:
+            header = f"Current project: <b>{current}</b>"
+        else:
+            header = "Current project: <b>None (default)</b>"
+
+        buttons = []
+        for p in projects:
+            name = p.get("name", "")
+            title = p.get("title", name)
+            if name == current:
+                label = f"[active] {title} ({name})"
+            else:
+                label = f"{title} ({name})"
+            buttons.append([InlineKeyboardButton(label, callback_data=f"project_set:{name}")])
+
+        # Add 'None (default)' button to deactivate
+        none_label = "[active] None (default)" if not current else "None (default)"
+        buttons.append([InlineKeyboardButton(none_label, callback_data="project_set:")])
+
+        markup = InlineKeyboardMarkup(buttons)
+        await update.message.reply_text(
+            f"-- <b>Project Switching</b> --\n\n{header}\n\nSelect a project:",
+            parse_mode="HTML",
+            reply_markup=markup,
+        )
+    except Exception as e:
+        log.error(f"Failed to list projects: {e}")
+        await update.message.reply_text(f"Failed to list projects: {str(e)[:300]}")
+
+
+async def callback_project_set(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Handle inline button press to switch project."""
+    query = update.callback_query
+    await query.answer()
+
+    if not is_authorized(update):
+        return
+
+    cb_data = query.data or ""
+    if not cb_data.startswith("project_set:"):
+        return
+
+    project_name = cb_data.split(":", 1)[1]  # empty string means 'None'
+    chat_id = str(update.effective_chat.id)
+
+    # Reset current context so next message starts fresh with new project
+    old_ctx = chat_contexts.pop(chat_id, None)
+
+    if project_name:
+        chat_projects[chat_id] = project_name
+        log.info(f"Project switched to '{project_name}' for chat {chat_id} (context reset)")
+        try:
+            await query.edit_message_text(
+                f"-- Project switched to <b>{project_name}</b> --\n"
+                f"Context has been reset. Next message will use this project.",
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+    else:
+        chat_projects.pop(chat_id, None)
+        log.info(f"Project deactivated for chat {chat_id} (context reset)")
+        try:
+            await query.edit_message_text(
+                "-- Project deactivated (default) --\n"
+                "Context has been reset. Next message will use no project.",
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+
+
+# ---------------------------------------------------------------------------
 #  Message handlers (text, photo, document)
 # ---------------------------------------------------------------------------
 
@@ -773,6 +865,7 @@ if __name__ == "__main__":
         BotCommand("nudge", "Kick stuck agent"),
         BotCommand("context", "Show context window info"),
         BotCommand("tasks", "List scheduled tasks"),
+        BotCommand("project", "Switch A0 project"),
     ]
 
     async def post_init(application):
@@ -797,9 +890,11 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("nudge", cmd_nudge))
     app.add_handler(CommandHandler("context", cmd_context))
     app.add_handler(CommandHandler("tasks", cmd_tasks))
+    app.add_handler(CommandHandler("project", cmd_project))
 
-    # Callback handler for inline keyboard buttons (task run)
+    # Callback handler for inline keyboard buttons (task run, project set)
     app.add_handler(CallbackQueryHandler(callback_task_run, pattern=r"^task_run:"))
+    app.add_handler(CallbackQueryHandler(callback_project_set, pattern=r"^project_set:"))
 
     # Message handlers
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_text))

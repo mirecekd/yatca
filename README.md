@@ -2,9 +2,11 @@
 
 A full-featured Telegram bot bridge for [Agent Zero](https://github.com/frdel/agent-zero). Send messages, photos, and files to your Agent Zero instance directly from Telegram.
 
-![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)
-![License: MIT](https://img.shields.io/badge/license-MIT-green)
-[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-mirecekdg-yellow)](https://buymeacoffee.com/mirecekdg)
+<div align="center">
+
+[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/mirecekdg)
+
+</div>
 
 ---
 
@@ -228,4 +230,8 @@ MIT
 
 If you find YATCA useful, consider buying me a coffee!
 
-[![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-mirecekdg-yellow?style=for-the-badge&logo=buy-me-a-coffee)](https://buymeacoffee.com/mirecekdg)
+<div align="center">
+
+[!["Buy Me A Coffee"](https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png)](https://www.buymeacoffee.com/mirecekdg)
+
+</div>

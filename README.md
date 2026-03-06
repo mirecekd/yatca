@@ -1,5 +1,10 @@
 # YATCA — Yet Another Telegram Connector for Agent-zero
+
+<div align="center">
+
 # 🦙
+
+</div>
 
 A full-featured Telegram bot bridge for [Agent Zero](https://github.com/frdel/agent-zero). Send messages, photos, and files to your Agent Zero instance directly from Telegram.
 

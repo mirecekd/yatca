@@ -382,6 +382,10 @@ async def agent_reply(
         f"{message_text[:100]}{'...' if len(message_text) > 100 else ''}{att_info}"
     )
     project = chat_projects.get(chat_id)
+
+    # Send processing indicator immediately
+    processing_msg = await update.message.reply_text("⏳ Processing...")
+
     typing_active = True
     async def keep_typing():
         while typing_active:
@@ -395,6 +399,15 @@ async def agent_reply(
     typing_task = asyncio.create_task(keep_typing())
     try:
         data = await send_to_agent(message_text, context_id, attachments, project_name=project)
+    except Exception:
+        # On error, remove the processing indicator so callers can send their own error
+        typing_active = False
+        typing_task.cancel()
+        try:
+            await processing_msg.delete()
+        except Exception:
+            pass
+        raise
     finally:
         typing_active = False
         typing_task.cancel()
@@ -412,13 +425,39 @@ async def agent_reply(
     )
     html_reply = markdown_to_telegram_html(reply)
     chunks = split_message(html_reply)
-    for chunk in chunks:
+
+    # Edit the processing message with the first chunk
+    first_sent = False
+    for i, chunk in enumerate(chunks):
+        if i == 0:
+            # Try to edit the "Processing..." message with the first chunk
+            try:
+                await processing_msg.edit_text(chunk, parse_mode="HTML")
+                first_sent = True
+                continue
+            except Exception as fmt_err:
+                log.warning(f"HTML edit failed for first chunk, trying plain text: {fmt_err}")
+                try:
+                    plain_chunks = split_message(reply)
+                    await processing_msg.edit_text(plain_chunks[0])
+                    for pc in plain_chunks[1:]:
+                        await update.message.reply_text(pc)
+                    first_sent = True
+                    break
+                except Exception as edit_err:
+                    log.warning(f"Edit failed entirely, falling back to delete+send: {edit_err}")
+                    try:
+                        await processing_msg.delete()
+                    except Exception:
+                        pass
+        # Send remaining chunks as new messages
         try:
             await update.message.reply_text(chunk, parse_mode="HTML")
         except Exception as fmt_err:
             log.warning(f"HTML parse failed, sending as plain text: {fmt_err}")
             plain_chunks = split_message(reply)
-            for pc in plain_chunks:
+            start = 1 if first_sent else 0
+            for pc in plain_chunks[start:]:
                 await update.message.reply_text(pc)
             break
 

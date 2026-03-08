@@ -220,6 +220,53 @@ def split_message(text: str, limit: int = TELEGRAM_MAX_LEN) -> list[str]:
     return chunks
 
 
+def strip_html_tags(text: str) -> str:
+    """Remove HTML tags from text, preserving content."""
+    clean = re.sub(r"<[^>]+>", "", text)
+    return html_module.unescape(clean)
+
+
+async def safe_send_html(
+    message,
+    text: str,
+    raw_text: str = "",
+    edit: bool = False,
+) -> bool:
+    """Send or edit a Telegram message with 3-level fallback.
+
+    1. Try HTML parse_mode
+    2. Strip HTML tags -> send as plain text
+    3. Truncate to 4000 chars as last resort
+
+    Returns True if message was sent/edited successfully.
+    """
+    send = message.edit_text if edit else message.reply_text
+
+    # Level 1: HTML
+    try:
+        await send(text, parse_mode="HTML")
+        return True
+    except Exception as e:
+        log.warning(f"HTML {'edit' if edit else 'send'} failed: {e}")
+
+    # Level 2: Strip tags -> plain text
+    plain = raw_text or strip_html_tags(text)
+    try:
+        await send(plain)
+        return True
+    except Exception as e:
+        log.warning(f"Plain text {'edit' if edit else 'send'} failed: {e}")
+
+    # Level 3: Truncate
+    try:
+        truncated = plain[:4000] + "\n\n[...truncated]"
+        await send(truncated)
+        return True
+    except Exception as e:
+        log.error(f"All send attempts failed: {e}")
+        return False
+
+
 async def download_file_bytes(file_obj) -> bytes:
     tg_file = await file_obj.get_file()
     return await tg_file.download_as_bytearray()
@@ -386,17 +433,47 @@ async def agent_reply(
     # Send processing indicator immediately
     processing_msg = await update.message.reply_text("⏳ Processing...")
 
+    import time as _time
+    _proc_start = _time.monotonic()
     typing_active = True
-    async def keep_typing():
+
+    async def keep_typing_and_update():
+        """Keep typing indicator alive and update processing message with elapsed time."""
+        update_interval = 10  # seconds between processing message updates
+        typing_interval = 4   # seconds between typing indicators
+        next_update = update_interval
+        elapsed_tick = 0
+        status_messages = [
+            (10, "⏳ Processing... ({elapsed}s)"),
+            (20, "⏳ Processing... ({elapsed}s) — taking a bit longer"),
+            (30, "⏳ Processing... ({elapsed}s) — still working..."),
+            (60, "⏳ Processing... ({elapsed}s) — complex task, hang tight"),
+            (120, "⏳ Processing... ({elapsed}s) — this is a long one..."),
+        ]
         while typing_active:
             try:
-                await asyncio.sleep(4)
-                if typing_active:
-                    await update.effective_chat.send_action(ChatAction.TYPING)
+                await asyncio.sleep(typing_interval)
+                if not typing_active:
+                    break
+                await update.effective_chat.send_action(ChatAction.TYPING)
+                elapsed_tick += typing_interval
+                if elapsed_tick >= next_update:
+                    elapsed = int(_time.monotonic() - _proc_start)
+                    # Pick the right status message
+                    msg = status_messages[0][1]  # default
+                    for threshold, template in status_messages:
+                        if elapsed >= threshold:
+                            msg = template
+                    try:
+                        await processing_msg.edit_text(msg.format(elapsed=elapsed))
+                    except Exception:
+                        pass  # edit can fail if message was already edited
+                    next_update += update_interval
             except Exception:
                 break
+
     await update.effective_chat.send_action(ChatAction.TYPING)
-    typing_task = asyncio.create_task(keep_typing())
+    typing_task = asyncio.create_task(keep_typing_and_update())
     try:
         data = await send_to_agent(message_text, context_id, attachments, project_name=project)
     except Exception:
@@ -425,41 +502,29 @@ async def agent_reply(
     )
     html_reply = markdown_to_telegram_html(reply)
     chunks = split_message(html_reply)
+    plain_chunks = split_message(reply)
 
-    # Edit the processing message with the first chunk
-    first_sent = False
-    for i, chunk in enumerate(chunks):
-        if i == 0:
-            # Try to edit the "Processing..." message with the first chunk
-            try:
-                await processing_msg.edit_text(chunk, parse_mode="HTML")
-                first_sent = True
-                continue
-            except Exception as fmt_err:
-                log.warning(f"HTML edit failed for first chunk, trying plain text: {fmt_err}")
-                try:
-                    plain_chunks = split_message(reply)
-                    await processing_msg.edit_text(plain_chunks[0])
-                    for pc in plain_chunks[1:]:
-                        await update.message.reply_text(pc)
-                    first_sent = True
-                    break
-                except Exception as edit_err:
-                    log.warning(f"Edit failed entirely, falling back to delete+send: {edit_err}")
-                    try:
-                        await processing_msg.delete()
-                    except Exception:
-                        pass
-        # Send remaining chunks as new messages
+    # Edit the processing message with the first chunk (with HTML fallback)
+    first_ok = await safe_send_html(
+        processing_msg, chunks[0],
+        raw_text=plain_chunks[0] if plain_chunks else "",
+        edit=True,
+    )
+    if not first_ok:
+        # Edit failed entirely - delete processing msg and send as new message
         try:
-            await update.message.reply_text(chunk, parse_mode="HTML")
-        except Exception as fmt_err:
-            log.warning(f"HTML parse failed, sending as plain text: {fmt_err}")
-            plain_chunks = split_message(reply)
-            start = 1 if first_sent else 0
-            for pc in plain_chunks[start:]:
-                await update.message.reply_text(pc)
-            break
+            await processing_msg.delete()
+        except Exception:
+            pass
+        await safe_send_html(
+            update.message, chunks[0],
+            raw_text=plain_chunks[0] if plain_chunks else "",
+        )
+
+    # Send remaining chunks as new messages (with HTML fallback)
+    for i, chunk in enumerate(chunks[1:], start=1):
+        raw = plain_chunks[i] if i < len(plain_chunks) else ""
+        await safe_send_html(update.message, chunk, raw_text=raw)
 
 
 # ---------------------------------------------------------------------------

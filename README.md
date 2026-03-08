@@ -31,6 +31,9 @@ A full-featured Telegram bot bridge for [Agent Zero](https://github.com/frdel/ag
 - **Task scheduler** — list and trigger scheduled tasks with inline buttons
 - **Auto-reconnect** — CSRF session management with automatic re-authentication
 - **Supervisord managed** — auto-restart on crash
+- **Persistent state** — chat contexts and project selections survive bot restarts (JSON state file)
+- **HTML fallback** — 3-level message delivery: HTML → plain text → truncated (never fails to send)
+- **Dynamic processing indicator** — "Processing..." message updates every 10s with elapsed time and status
 
 ## Commands
 
@@ -192,6 +195,7 @@ telegram_bridge RUNNING pid 1234, uptime 0:00:05
 | `TELEGRAM_USER_IDS` | | — | Comma-separated allowed Telegram user IDs |
 | `TELEGRAM_CHAT_IDS` | | — | Comma-separated allowed Telegram chat IDs |
 | `MAX_FILE_SIZE_MB` | | `20` | Max file size for attachments in MB |
+| `YATCA_STATE_FILE` | | `/a0/usr/workdir/yatca_state.json` | Path to persistent state file |
 
 ---
 

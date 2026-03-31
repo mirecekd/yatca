@@ -1,4 +1,4 @@
-# YATCA — Yet Another Telegram Connector for Agent-zero
+# YATCA -- Yet Another Telegram Connector for Agent-zero
 
 ---
 
@@ -8,7 +8,7 @@
 
 ---
 
-A full-featured Telegram bot bridge for [Agent Zero](https://github.com/frdel/agent-zero). Send messages, photos, and files to your Agent Zero instance directly from Telegram.
+A full-featured Telegram bot plugin for [Agent Zero](https://github.com/frdel/agent-zero). Send messages, photos, and files to your Agent Zero instance directly from Telegram.
 
 <div align="center">
 
@@ -18,22 +18,47 @@ A full-featured Telegram bot bridge for [Agent Zero](https://github.com/frdel/ag
 
 ---
 
+## v2: Native Agent Zero Plugin
+
+YATCA v2 is a **native Agent Zero plugin** that integrates directly with the A0 engine. No more standalone bridge scripts, supervisord configs, or `.env` files -- everything is managed through the A0 WebUI.
+
+This repo is structured for the [a0-plugins](https://github.com/agent0ai/a0-plugins) community index. When Agent Zero installs the plugin, it clones this repo into `plugins/yatca/`.
+
+### Key Changes from v1
+
+| v1 (standalone bridge) | v2 (A0 plugin) |
+|---|---|
+| Standalone `telegram_bridge.py` | Native A0 plugin at repo root |
+| `python-telegram-bot` library | `aiogram` (consistent with A0 ecosystem) |
+| HTTP `/api_message` calls | Direct `AgentContext` integration |
+| `.env` configuration | WebUI settings panel |
+| Supervisord lifecycle | A0 job_loop lifecycle |
+| Single bot | Multiple bots supported |
+| Polling only | Polling + webhook modes |
+
+---
+
 ## Features
 
-- **Text messages** — forwarded to Agent Zero, responses streamed back
-- **Photos** — sent as base64 attachments for vision analysis
-- **Documents/files** — forwarded as attachments (up to 20 MB)
-- **Access control** — whitelist by Telegram User ID and/or Chat ID
-- **Markdown rendering** — Agent Zero markdown converted to Telegram HTML
-- **Long message splitting** — auto-splits responses exceeding Telegram's 4096 char limit
-- **Agent control** — pause, resume, nudge stuck agents
-- **Context window info** — check token usage
-- **Task scheduler** — list and trigger scheduled tasks with inline buttons
-- **Project switching** — switch active A0 project per Telegram chat
-- **State persistence** — remembers context IDs and selected projects across restarts
-- **Auto-reconnect** — CSRF session management with automatic re-authentication
-- **Supervisord managed** — auto-restart on crash
-- **A0-aware startup** — waits for Agent Zero `/health` before launching the bridge
+- **Text messages** -- forwarded to Agent Zero, responses streamed back
+- **Photos** -- sent as file attachments for vision analysis
+- **Documents/files** -- forwarded as attachments with configurable size limit
+- **Rich Markdown rendering** -- tables (as monospace), code blocks, LaTeX stripping
+- **Long message splitting** -- auto-splits responses exceeding Telegram's 4096 char limit
+- **Multi-level send fallback** -- HTML -> plain text -> truncated
+- **Agent control** -- pause, resume, nudge stuck agents
+- **Context window info** -- check token usage
+- **Task scheduler** -- list and trigger scheduled tasks with inline buttons
+- **Project switching** -- switch active A0 project per Telegram user
+- **Inline keyboards** -- agent can send interactive buttons
+- **Per-user chat sessions** -- each Telegram user gets a dedicated AgentContext
+- **State persistence** -- remembers contexts across restarts
+- **Access control** -- per-bot allow-list by user ID, @username, or chat ID
+- **Group support** -- mention, all, or off modes
+- **Typing indicator** -- persistent "typing..." while agent processes
+- **WebUI config** -- full settings panel in Agent Zero WebUI
+- **Auto dependency install** -- aiogram installed on first use via uv
+- **Multiple bots** -- run as many bots as you need
 
 ## Commands
 
@@ -41,7 +66,7 @@ A full-featured Telegram bot bridge for [Agent Zero](https://github.com/frdel/ag
 |---------|-------------|
 | `/start` | Start the bot |
 | `/help` | Show available commands |
-| `/reset` | Start a new conversation |
+| `/clear` | Start a new conversation |
 | `/status` | Show connection status |
 | `/id` | Show your User/Chat ID |
 | `/stop` | Pause the agent (stop current work) |
@@ -53,268 +78,114 @@ A full-featured Telegram bot bridge for [Agent Zero](https://github.com/frdel/ag
 
 ---
 
-## Quick Install (Paste into Agent Zero)
+## Quick Install
 
-The easiest way to install YATCA is to **paste the following instruction directly into your Agent Zero chat**.
+### Via Agent Zero Plugin Manager
 
-> Before pasting, make sure you have your **Telegram Bot Token** ready (get one from [@BotFather](https://t.me/BotFather)).
+Once published to the [a0-plugins](https://github.com/agent0ai/a0-plugins) index, YATCA will be installable directly from the Agent Zero WebUI plugin browser.
 
-### Paste this into Agent Zero:
+### Manual Install
+
+Clone this repo into your Agent Zero plugins directory:
+
+```bash
+cd /path/to/agent-zero/plugins
+git clone https://github.com/mirecekd/yatca.git yatca
+```
+
+Then:
+
+1. Open the Agent Zero WebUI
+2. Go to Settings -> External
+3. Find "YATCA" and click Configure
+4. Add a bot with your Telegram Bot Token (from [@BotFather](https://t.me/BotFather))
+5. Enable the bot and save
+
+The bot will start automatically. No restart needed.
+
+> **Tip:** Don't know your Telegram User ID? Start the bot without access control, send `/id`, then add your ID to the allowed users list.
+
+---
+
+## Plugin Structure
 
 ```text
-Install YATCA into this Agent Zero container and configure it for autostart.
-
-Download repo from https://github.com/mirecekd/yatca
-
-Do the following exactly:
-
-1. Install Python dependencies into /opt/venv:
-   pip install aiohttp python-telegram-bot python-dotenv
-
-2. Download these files from the YATCA repository and save them exactly here:
-   - /a0/usr/workdir/telegram_bridge.py
-   - /a0/usr/workdir/yatca_run.sh
-
-3. Make the runner executable:
-   chmod +x /a0/usr/workdir/yatca_run.sh
-
-4. Add these variables to /a0/usr/.env if they are missing:
-   TELEGRAM_BOT_TOKEN=<I WILL PROVIDE THIS>
-   TELEGRAM_USER_IDS=<MY TELEGRAM USER ID>
-
-   Optional:
-   TELEGRAM_CHAT_IDS=
-   A0_API_URL=http://127.0.0.1:80/api_message
-   A0_TIMEOUT=300
-   MAX_FILE_SIZE_MB=20
-   YATCA_STATE_FILE=/a0/usr/workdir/yatca_state.json
-
-5. Register YATCA in the ACTIVE supervisord config used by this container.
-   Important: detect which supervisord config is actually used by PID 1.
-   In this Agent Zero container it may be /etc/supervisor/conf.d/supervisord.conf.
-
-   Add this program section if it is not present yet:
-
-   [program:telegram_bridge]
-   command=/a0/usr/workdir/yatca_run.sh
-   directory=/a0
-   user=root
-   autostart=true
-   autorestart=true
-   startsecs=5
-   startretries=20
-   stopwaitsecs=20
-   stdout_logfile=/dev/stdout
-   stdout_logfile_maxbytes=0
-   stderr_logfile=/dev/stderr
-   stderr_logfile_maxbytes=0
-   stopasgroup=true
-   killasgroup=true
-   environment=PYTHONUNBUFFERED="1",A0_HEALTH_URL="http://127.0.0.1/health",YATCA_A0_WAIT_TIMEOUT="300",YATCA_A0_CHECK_INTERVAL="2"
-   priority=200
-
-6. Reload supervisord and ensure telegram_bridge exists and starts.
-
-7. Verify with:
-   supervisorctl status telegram_bridge
-
-Important behavior requirement:
-- YATCA must NOT start immediately.
-- It must wait until Agent Zero health endpoint returns HTTP 200 on /health.
-- Do not add extra waiting for mount paths. Waiting for /health is the intended startup gate.
-
-My Telegram Bot Token is: <PASTE YOUR TOKEN HERE>
-My Telegram User ID is: <PASTE YOUR USER ID HERE>
+yatca/                           # Repo root = plugin root
+|-- plugin.yaml                  # Plugin metadata
+|-- default_config.yaml          # Default configuration
+|-- requirements.txt             # Python dependencies (aiogram, aiohttp)
+|-- README.md                    # This file
+|
+|-- helpers/
+|   |-- __init__.py
+|   |-- constants.py             # Plugin name, paths, context keys
+|   |-- dependencies.py          # Auto-install aiogram via uv
+|   |-- telegram_client.py       # Telegram API wrapper, MD->HTML converter
+|   |-- bot_manager.py           # Bot lifecycle, polling/webhook
+|   +-- handler.py               # All commands, message routing, A0 API
+|
+|-- extensions/python/
+|   |-- job_loop/
+|   |   +-- _10_yatca_bot.py     # Bot lifecycle manager
+|   |-- system_prompt/
+|   |   +-- _20_yatca_context.py # Telegram system prompt injection
+|   |-- tool_execute_after/
+|   |   +-- _50_yatca_response.py # Response tool intercept
+|   +-- process_chain_end/
+|       +-- _55_yatca_reply.py   # Auto-send final reply
+|
+|-- prompts/                     # Prompt templates
+|-- api/                         # Webhook + test_connection endpoints
+|-- webui/                       # Settings panel (config.html + store.js)
+|
+|-- telegram_bridge.py           # Legacy v1 standalone bridge
+|-- yatca_run.sh                 # Legacy v1 runner script
++-- yatca_startup.sh             # Legacy v1 installer script
 ```
-
-> **Tip:** Don't know your Telegram User ID? Start the bot without `TELEGRAM_USER_IDS`, send `/id`, then add your ID and restart YATCA.
-
----
-
-## Manual Installation
-
-### Prerequisites
-
-- Agent Zero running in Docker
-- Telegram Bot Token from [@BotFather](https://t.me/BotFather)
-- Access to the running container shell
-
-### Step 1: Copy files into the container
-
-```bash
-docker cp telegram_bridge.py agent-zero:/a0/usr/workdir/telegram_bridge.py
-docker cp yatca_run.sh agent-zero:/a0/usr/workdir/yatca_run.sh
-docker exec -it agent-zero chmod +x /a0/usr/workdir/yatca_run.sh
-```
-
-### Step 2: Install dependencies
-
-```bash
-docker exec -it agent-zero /opt/venv/bin/pip install aiohttp python-telegram-bot python-dotenv
-```
-
-### Step 3: Configure environment variables
-
-Add to `/a0/usr/.env` inside the container:
-
-```env
-# === YATCA Telegram Bridge ===
-TELEGRAM_BOT_TOKEN=123456:ABC-DEF...
-
-# Access control (comma-separated, leave empty to allow all)
-TELEGRAM_USER_IDS=123456789
-TELEGRAM_CHAT_IDS=
-
-# Optional overrides
-A0_API_URL=http://127.0.0.1:80/api_message
-A0_TIMEOUT=300
-MAX_FILE_SIZE_MB=20
-YATCA_STATE_FILE=/a0/usr/workdir/yatca_state.json
-```
-
-> The bridge also reads `AUTH_LOGIN` and `AUTH_PASSWORD` from `.env` for internal API authentication used by commands like `/stop`, `/resume`, `/nudge`, `/tasks`, and `/project`.
-
-### Step 4: Add supervisord program
-
-First detect the active supervisord config:
-
-```bash
-docker exec -it agent-zero ps -ef | grep supervisord
-```
-
-In many Agent Zero containers the active file is:
-
-```text
-/etc/supervisor/conf.d/supervisord.conf
-```
-
-Add this block to the **active** config file:
-
-```ini
-[program:telegram_bridge]
-command=/a0/usr/workdir/yatca_run.sh
-directory=/a0
-user=root
-autostart=true
-autorestart=true
-startsecs=5
-startretries=20
-stopwaitsecs=20
-stdout_logfile=/dev/stdout
-stdout_logfile_maxbytes=0
-stderr_logfile=/dev/stderr
-stderr_logfile_maxbytes=0
-stopasgroup=true
-killasgroup=true
-environment=PYTHONUNBUFFERED="1",A0_HEALTH_URL="http://127.0.0.1/health",YATCA_A0_WAIT_TIMEOUT="300",YATCA_A0_CHECK_INTERVAL="2"
-priority=200
-```
-
-### Step 5: Reload supervisord
-
-```bash
-docker exec -it agent-zero supervisorctl reread
-docker exec -it agent-zero supervisorctl update
-```
-
-### Step 6: Verify
-
-```bash
-docker exec -it agent-zero supervisorctl status telegram_bridge
-```
-
-If everything is correct, YATCA will:
-
-1. start under supervisord
-2. wait for `GET /health` on Agent Zero
-3. launch `telegram_bridge.py`
-4. auto-restart if the bridge crashes
-
----
-
-## Startup Model
-
-YATCA intentionally uses **A0 health readiness** as the startup gate.
-
-It does **not** wait on arbitrary mount paths.
-
-The runner logic is:
-
-1. ensure Python dependencies are installed
-2. poll `http://127.0.0.1/health`
-3. continue only after HTTP 200
-4. `exec` the Telegram bridge
-
-Current runner file:
-
-- `/a0/usr/workdir/yatca_run.sh`
-
----
-
-## Included helper scripts
-
-| File | Purpose |
-|---|---|
-| `telegram_bridge.py` | Main Telegram bridge |
-| `yatca_run.sh` | Waits for A0 `/health`, then starts the bridge |
-| `yatca_startup.sh` | Legacy installer/helper script retained for reference/manual setup |
 
 ---
 
 ## Configuration Reference
 
-| Variable | Required | Default | Description |
-|----------|----------|---------|-------------|
-| `TELEGRAM_BOT_TOKEN` | yes | — | Bot token from @BotFather |
-| `A0_API_URL` | no | `http://127.0.0.1:80/api_message` | Agent Zero API endpoint |
-| `A0_TIMEOUT` | no | `300` | Request timeout in seconds |
-| `A0_API_KEY` | no | auto-detected | API key (auto-read from A0 settings) |
-| `AUTH_LOGIN` | no | — | A0 web UI login for internal API auth |
-| `AUTH_PASSWORD` | no | — | A0 web UI password for internal API auth |
-| `TELEGRAM_USER_IDS` | no | — | Comma-separated allowed Telegram user IDs |
-| `TELEGRAM_CHAT_IDS` | no | — | Comma-separated allowed Telegram chat IDs |
-| `MAX_FILE_SIZE_MB` | no | `20` | Max file size for attachments in MB |
-| `YATCA_STATE_FILE` | no | `/a0/usr/workdir/yatca_state.json` | Persistent state file for contexts/projects |
-| `A0_HEALTH_URL` | no | `http://127.0.0.1/health` | Health endpoint checked by `yatca_run.sh` |
-| `YATCA_A0_WAIT_TIMEOUT` | no | `300` | Max seconds to wait for A0 health |
-| `YATCA_A0_CHECK_INTERVAL` | no | `2` | Poll interval in seconds |
+All settings are configured via the WebUI. Per-bot options:
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| `name` | -- | Unique bot identifier |
+| `enabled` | `true` | Enable/disable the bot |
+| `token` | -- | Bot token from @BotFather |
+| `mode` | `polling` | `polling` or `webhook` |
+| `webhook_url` | -- | Your A0 base URL (webhook mode only) |
+| `webhook_secret` | -- | Optional shared secret for webhook |
+| `allowed_users` | `[]` | User IDs or @usernames (empty = all) |
+| `allowed_chats` | `[]` | Chat IDs (empty = all) |
+| `group_mode` | `mention` | `mention`, `all`, or `off` |
+| `default_project` | -- | Default A0 project name |
+| `user_projects` | `{}` | Map user_id to project name |
+| `max_file_size_mb` | `20` | Max attachment size in MB |
+| `a0_timeout` | `300` | Request timeout in seconds |
+| `attachment_max_age_hours` | `0` | Auto-cleanup age (0 = keep forever) |
+| `notify_messages` | `false` | WebUI notifications for messages |
+| `welcome_enabled` | `false` | Welcome message in groups |
+| `welcome_message` | -- | Welcome template (`{name}` placeholder) |
+| `agent_instructions` | -- | Extra instructions for the agent |
 
 ---
 
 ## Architecture
 
 ```text
-+-------------+         +------------------+         +-------------+
-|  Telegram   |  HTTPS  |   YATCA Bridge   |  HTTP   | Agent Zero  |
-|   (User)    |<------->| (python-tg-bot)  |<------->|   API/UI    |
-+-------------+         +------------------+         +-------------+
++-------------+         +-------------------+         +-------------+
+|  Telegram   |  HTTPS  |   YATCA Plugin    |  A0 API | Agent Zero  |
+|   (User)    |<------->| (aiogram bot)     |<------->|   Engine    |
++-------------+         +-------------------+         +-------------+
                                 |
-                                |--- /api_message         (X-API-KEY auth)
-                                |--- /pause               (Session + CSRF)
-                                |--- /nudge               (Session + CSRF)
-                                |--- /ctx_window_get      (Session + CSRF)
-                                |--- /scheduler_tasks_list(Session + CSRF)
-                                +--- /projects            (Session + CSRF)
+                                |--- AgentContext (per-user sessions)
+                                |--- /pause, /nudge  (CSRF session)
+                                |--- /ctx_window_get (CSRF session)
+                                |--- /scheduler_*    (CSRF session)
+                                +--- /projects       (CSRF session)
 ```
-
-The bridge uses two authentication methods:
-
-- **`/api_message`** — API key authentication (`X-API-KEY` header)
-- **other internal endpoints** — session authentication (login + CSRF token), handled automatically by `A0SessionManager`
-
----
-
-## Troubleshooting
-
-| Problem | Solution |
-|---------|----------|
-| Bot doesn't respond | Check `supervisorctl status telegram_bridge` |
-| YATCA starts too early | Verify the program uses `/a0/usr/workdir/yatca_run.sh`, not direct `python3 telegram_bridge.py` |
-| `ERROR (no such process)` in supervisorctl | You likely edited the wrong supervisord config; inspect the active config used by PID 1 |
-| `CSRF token missing` | Ensure `AUTH_LOGIN` and `AUTH_PASSWORD` are set in `.env` |
-| `API key required` | Check that A0 settings expose an MCP server token or set `A0_API_KEY` explicitly |
-| `/tasks` or `/project` returns error | Verify A0 web UI credentials in `.env` |
-| Bot ignores messages | Check `TELEGRAM_USER_IDS` / `TELEGRAM_CHAT_IDS` whitelist |
 
 ---
 
@@ -338,7 +209,8 @@ If you find YATCA useful, consider buying me a coffee!
 
 YATCA was inspired by and built upon these projects:
 
-- [winboost/agent-zero-telegram-bridge](https://github.com/winboost/agent-zero-telegram-bridge) — the original Telegram bridge for Agent Zero
-- [seqis/Agent Zero to Telegram Bridge](https://gist.github.com/seqis/69ba87a3d8c552b94b8a6bf9612b1c28) — how-to guide for building an A0 Telegram bridge
+- [agent0ai/agent-zero](https://github.com/agent0ai/agent-zero) -- Agent Zero plugin system and `_telegram_integration` reference plugin
+- [winboost/agent-zero-telegram-bridge](https://github.com/winboost/agent-zero-telegram-bridge) -- the original Telegram bridge for Agent Zero
+- [seqis/Agent Zero to Telegram Bridge](https://gist.github.com/seqis/69ba87a3d8c552b94b8a6bf9612b1c28) -- how-to guide for building an A0 Telegram bridge
 
 ---

@@ -1,0 +1,207 @@
+<html>
+<head>
+  <title>YATCA - Telegram Integration</title>
+  <script type="module">
+    import { store } from "/plugins/yatca/webui/telegram-config-store.js";
+  </script>
+</head>
+
+<body>
+  <div x-data x-init="$store.yatcaConfig.init()">
+    <template x-if="$store.yatcaConfig.config">
+      <div class="tg-page">
+        <div class="section-title">YATCA - Telegram Integration</div>
+        <div class="section-description">
+          Configure Telegram bots to communicate with Agent Zero via Telegram.
+          YATCA provides agent control, project switching, scheduled tasks, and more.
+        </div>
+
+        <!-- Quick Start Guide -->
+        <details class="tg-guide" style="margin: 16px 0; padding: 8px; border: 1px solid #444; border-radius: 8px;">
+          <summary style="cursor: pointer; font-weight: bold;">Quick Start Guide</summary>
+          <div style="padding: 12px 0;">
+            <ol>
+              <li>Open Telegram and search for <a href="https://t.me/BotFather" target="_blank">@BotFather</a></li>
+              <li>Send <code>/newbot</code> and follow instructions to create a bot</li>
+              <li>Copy the bot token</li>
+              <li>Click "Add Bot" below, paste the token, and enable the bot</li>
+              <li>Save settings - the bot will start automatically</li>
+            </ol>
+            <p><strong>Commands available in Telegram:</strong></p>
+            <ul>
+              <li><code>/start</code> - Start the bot</li>
+              <li><code>/help</code> - Show commands</li>
+              <li><code>/clear</code> - Reset conversation</li>
+              <li><code>/status</code> - Connection status</li>
+              <li><code>/id</code> - Show your IDs</li>
+              <li><code>/stop</code> - Pause the agent</li>
+              <li><code>/resume</code> - Resume agent</li>
+              <li><code>/nudge</code> - Kick stuck agent</li>
+              <li><code>/context</code> - Context window info</li>
+              <li><code>/tasks</code> - Scheduled tasks</li>
+              <li><code>/project</code> - Switch project</li>
+            </ul>
+          </div>
+        </details>
+
+        <!-- Bot list -->
+        <template x-for="(bot, index) in $store.yatcaConfig.bots" :key="index">
+          <div style="border: 1px solid #555; border-radius: 8px; padding: 16px; margin: 12px 0;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <h3 x-text="bot.name || 'Unnamed Bot'" style="margin: 0;"></h3>
+              <div>
+                <label style="margin-right: 12px;">
+                  <input type="checkbox" x-model="bot.enabled"> Enabled
+                </label>
+                <button @click="$store.yatcaConfig.removeBot(index)"
+                        style="background: #c33; color: white; border: none; padding: 4px 12px; border-radius: 4px; cursor: pointer;">
+                  Remove
+                </button>
+              </div>
+            </div>
+
+            <!-- Bot Name -->
+            <div style="margin-bottom: 8px;">
+              <label>Bot Name</label>
+              <input type="text" x-model="bot.name" placeholder="my_bot"
+                     style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid #666;">
+            </div>
+
+            <!-- Token -->
+            <div style="margin-bottom: 8px;">
+              <label>Bot Token</label>
+              <div style="display: flex; gap: 8px;">
+                <input type="password" x-model="bot.token" placeholder="123456:ABC-DEF..."
+                       style="flex: 1; padding: 6px; border-radius: 4px; border: 1px solid #666;">
+                <button @click="$store.yatcaConfig.testToken(index)"
+                        :disabled="bot._testing"
+                        style="padding: 6px 16px; border-radius: 4px; border: 1px solid #666; cursor: pointer;">
+                  <span x-text="bot._testing ? 'Testing...' : 'Test'"></span>
+                </button>
+              </div>
+              <div x-show="bot._testResult" x-text="bot._testResult"
+                   style="margin-top: 4px; font-size: 0.9em;"></div>
+            </div>
+
+            <!-- Mode -->
+            <div style="margin-bottom: 8px;">
+              <label>Mode</label>
+              <select x-model="bot.mode" style="padding: 6px; border-radius: 4px; border: 1px solid #666;">
+                <option value="polling">Polling</option>
+                <option value="webhook">Webhook</option>
+              </select>
+            </div>
+
+            <!-- Webhook URL (shown when mode=webhook) -->
+            <template x-if="bot.mode === 'webhook'">
+              <div style="margin-bottom: 8px;">
+                <label>Webhook URL</label>
+                <input type="text" x-model="bot.webhook_url" placeholder="https://yourdomain.com"
+                       style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid #666;">
+                <label style="margin-top: 4px; display: block;">Webhook Secret (optional)</label>
+                <input type="text" x-model="bot.webhook_secret" placeholder="optional shared secret"
+                       style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid #666;">
+              </div>
+            </template>
+
+            <!-- Access Control -->
+            <div style="margin-bottom: 8px;">
+              <label>Allowed Users (comma-separated IDs or @usernames, empty = all)</label>
+              <input type="text"
+                     :value="$store.yatcaConfig.allowedUsersStr(bot)"
+                     @input="$store.yatcaConfig.setAllowedUsers(bot, $event.target.value)"
+                     placeholder="123456789, @username"
+                     style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid #666;">
+            </div>
+
+            <div style="margin-bottom: 8px;">
+              <label>Allowed Chats (comma-separated chat IDs, empty = all)</label>
+              <input type="text"
+                     :value="$store.yatcaConfig.allowedChatsStr(bot)"
+                     @input="$store.yatcaConfig.setAllowedChats(bot, $event.target.value)"
+                     placeholder="-100123456789"
+                     style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid #666;">
+            </div>
+
+            <!-- Group Mode -->
+            <div style="margin-bottom: 8px;">
+              <label>Group Mode</label>
+              <select x-model="bot.group_mode" style="padding: 6px; border-radius: 4px; border: 1px solid #666;">
+                <option value="mention">Mention (respond when @mentioned or replied to)</option>
+                <option value="all">All (respond to every message)</option>
+                <option value="off">Off (private chats only)</option>
+              </select>
+            </div>
+
+            <!-- Advanced settings (collapsible) -->
+            <details style="margin-top: 8px;">
+              <summary style="cursor: pointer;">Advanced Settings</summary>
+              <div style="padding: 8px 0;">
+
+                <div style="margin-bottom: 8px;">
+                  <label>Default Project</label>
+                  <input type="text" x-model="bot.default_project" placeholder="project_name"
+                         style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid #666;">
+                </div>
+
+                <div style="margin-bottom: 8px;">
+                  <label>Max File Size (MB)</label>
+                  <input type="number" x-model.number="bot.max_file_size_mb" min="1" max="50"
+                         style="padding: 6px; border-radius: 4px; border: 1px solid #666; width: 100px;">
+                </div>
+
+                <div style="margin-bottom: 8px;">
+                  <label>A0 Timeout (seconds)</label>
+                  <input type="number" x-model.number="bot.a0_timeout" min="30" max="900"
+                         style="padding: 6px; border-radius: 4px; border: 1px solid #666; width: 100px;">
+                </div>
+
+                <div style="margin-bottom: 8px;">
+                  <label>Attachment Max Age (hours, 0 = keep forever)</label>
+                  <input type="number" x-model.number="bot.attachment_max_age_hours" min="0"
+                         style="padding: 6px; border-radius: 4px; border: 1px solid #666; width: 100px;">
+                </div>
+
+                <div style="margin-bottom: 8px;">
+                  <label>
+                    <input type="checkbox" x-model="bot.notify_messages">
+                    Show WebUI notifications for incoming messages
+                  </label>
+                </div>
+
+                <div style="margin-bottom: 8px;">
+                  <label>
+                    <input type="checkbox" x-model="bot.welcome_enabled">
+                    Send welcome message in groups
+                  </label>
+                </div>
+
+                <template x-if="bot.welcome_enabled">
+                  <div style="margin-bottom: 8px;">
+                    <label>Welcome Message (use {name} for member name)</label>
+                    <input type="text" x-model="bot.welcome_message" placeholder="Welcome, {name}!"
+                           style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid #666;">
+                  </div>
+                </template>
+
+                <div style="margin-bottom: 8px;">
+                  <label>Agent Instructions (extra instructions for the agent in Telegram chats)</label>
+                  <textarea x-model="bot.agent_instructions" rows="3" placeholder="Optional extra instructions..."
+                            style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid #666;"></textarea>
+                </div>
+
+              </div>
+            </details>
+          </div>
+        </template>
+
+        <!-- Add Bot button -->
+        <button @click="$store.yatcaConfig.addBot()"
+                style="margin-top: 12px; padding: 8px 24px; border-radius: 4px; border: 1px solid #666; cursor: pointer;">
+          + Add Bot
+        </button>
+      </div>
+    </template>
+  </div>
+</body>
+</html>

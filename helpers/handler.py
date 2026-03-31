@@ -146,7 +146,7 @@ def _a0_run_task(task_id: str) -> dict:
 def _a0_list_projects() -> list[dict]:
     """List A0 projects directly."""
     try:
-        project_list = projects.list_projects()
+        project_list = projects.get_active_projects_list()
         result = []
         for p in project_list:
             if isinstance(p, dict):

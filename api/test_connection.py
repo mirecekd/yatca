@@ -14,7 +14,7 @@ class YatcaTestConnection(ApiHandler):
         return ["POST"]
 
     async def process(self, input: dict, request: Request) -> dict | Response:
-        token = input.get("token", "")
+        token = input.get("token", "") or (input.get("bot") or {}).get("token", "")
         if not token:
             return {"ok": False, "message": "Token is required"}
 

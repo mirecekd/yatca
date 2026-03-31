@@ -97,14 +97,19 @@ def _a0_nudge_context(ctx: AgentContext):
 
 
 def _a0_get_context_window(ctx: AgentContext) -> dict:
-    """Get context window info directly from the context."""
+    """Get context window info directly from the agent's stored data."""
     try:
-        from helpers import ctx_window
-        content = ctx_window.get_ctx_window(ctx)
-        # Rough token estimate (4 chars per token)
-        tokens = len(content) // 4
-        return {"tokens": tokens, "content": content}
-    except Exception:
+        agent = ctx.streaming_agent or ctx.agent0
+        window = agent.get_data(agent.DATA_NAME_CTX_WINDOW)
+        if window and isinstance(window, dict):
+            return {
+                "tokens": window.get("tokens", 0),
+                "content": window.get("text", ""),
+            }
+        # No window yet (fresh context, agent hasn't processed any message)
+        return {"tokens": 0, "content": "(no context window yet)"}
+    except Exception as e:
+        PrintStyle.error(f"YATCA: failed to read context window: {e}")
         return {"tokens": 0, "content": ""}
 
 

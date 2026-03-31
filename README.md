@@ -3,7 +3,7 @@
 ---
 
 <div align="center">
-<img src="yatca_ghcover.jpg" alt="YATCA" width="60%">
+<img src="legacy/yatca_ghcover.jpg" alt="YATCA" width="60%">
 </div>
 
 ---
@@ -138,9 +138,11 @@ yatca/                           # Repo root = plugin root
 |-- api/                         # Webhook + test_connection endpoints
 |-- webui/                       # Settings panel (config.html + store.js)
 |
-|-- telegram_bridge.py           # Legacy v1 standalone bridge
-|-- yatca_run.sh                 # Legacy v1 runner script
-+-- yatca_startup.sh             # Legacy v1 installer script
++-- legacy/                      # v1 standalone deployment files
+    |-- telegram_bridge.py       # v1 standalone bridge
+    |-- yatca_run.sh             # v1 runner script
+    |-- yatca_startup.sh         # v1 installer script
+    +-- yatca_ghcover.jpg        # Cover image
 ```
 
 ---

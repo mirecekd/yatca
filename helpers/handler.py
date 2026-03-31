@@ -114,20 +114,11 @@ def _a0_get_context_window(ctx: AgentContext) -> dict:
 
 
 def _a0_list_tasks() -> list[dict]:
-    """List scheduled tasks directly from A0 scheduler."""
+    """List scheduled tasks directly from A0 TaskScheduler."""
     try:
-        from helpers import scheduler
-        tasks = scheduler.get_tasks()
-        result = []
-        for t in tasks:
-            result.append({
-                "uuid": getattr(t, "uuid", getattr(t, "id", "?")),
-                "name": getattr(t, "name", "Unnamed"),
-                "state": getattr(t, "state", "unknown"),
-                "type": getattr(t, "type", "unknown"),
-                "next_run": str(getattr(t, "next_run", "")) or None,
-            })
-        return result
+        from helpers.task_scheduler import TaskScheduler
+        scheduler = TaskScheduler.get()
+        return scheduler.serialize_all_tasks()
     except Exception as e:
         PrintStyle.error(f"YATCA: failed to list tasks: {e}")
         return []
@@ -136,8 +127,12 @@ def _a0_list_tasks() -> list[dict]:
 def _a0_run_task(task_id: str) -> dict:
     """Run a scheduled task directly."""
     try:
-        from helpers import scheduler
-        scheduler.run_task(task_id)
+        from helpers.task_scheduler import TaskScheduler
+        scheduler = TaskScheduler.get()
+        task = scheduler.get_task(task_id)
+        if not task:
+            return {"success": False, "error": f"Task {task_id} not found"}
+        scheduler.run_task(task)
         return {"success": True, "message": "Task started."}
     except Exception as e:
         return {"success": False, "error": str(e)}

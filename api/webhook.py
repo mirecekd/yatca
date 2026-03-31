@@ -5,7 +5,7 @@ Receives Telegram webhook updates. No auth/CSRF -- Telegram cannot send session 
 
 from helpers.api import ApiHandler, Request, Response
 from helpers.print_style import PrintStyle
-from plugins.yatca.helpers.dependencies import ensure_dependencies
+from usr.plugins.yatca.helpers.dependencies import ensure_dependencies
 
 
 class YatcaWebhook(ApiHandler):
@@ -26,7 +26,7 @@ class YatcaWebhook(ApiHandler):
         ensure_dependencies()
         from aiogram.types import Update
 
-        from plugins.yatca.helpers.bot_manager import get_bot
+        from usr.plugins.yatca.helpers.bot_manager import get_bot
 
         bot_name = request.args.get("bot", "")
         if not bot_name:

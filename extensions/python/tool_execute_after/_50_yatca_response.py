@@ -7,12 +7,12 @@ Intercepts the 'response' tool to:
 
 from helpers.extension import Extension
 from helpers.tool import Response
-from plugins.yatca.helpers.constants import (
+from usr.plugins.yatca.helpers.constants import (
     CTX_TG_BOT,
     CTX_TG_ATTACHMENTS,
     CTX_TG_KEYBOARD,
 )
-from plugins.yatca.helpers.dependencies import ensure_dependencies
+from usr.plugins.yatca.helpers.dependencies import ensure_dependencies
 
 
 class YatcaResponseIntercept(Extension):
@@ -49,7 +49,7 @@ class YatcaResponseIntercept(Extension):
 
     async def _send_inline(self, context, tool, response: Response):
         ensure_dependencies()
-        from plugins.yatca.helpers.handler import send_telegram_reply
+        from usr.plugins.yatca.helpers.handler import send_telegram_reply
 
         agent = self.agent
         assert agent is not None

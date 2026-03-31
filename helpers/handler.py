@@ -37,9 +37,9 @@ from helpers.print_style import PrintStyle
 from helpers.errors import format_error
 from initialize import initialize_agent
 
-from plugins.yatca.helpers import telegram_client as tc
-from plugins.yatca.helpers.bot_manager import get_bot
-from plugins.yatca.helpers.constants import (
+from usr.plugins.yatca.helpers import telegram_client as tc
+from usr.plugins.yatca.helpers.bot_manager import get_bot
+from usr.plugins.yatca.helpers.constants import (
     PLUGIN_NAME,
     DOWNLOAD_FOLDER,
     STATE_FILE,

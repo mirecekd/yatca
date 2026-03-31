@@ -6,7 +6,7 @@ when the context belongs to a YATCA Telegram session.
 
 from helpers.extension import Extension
 from agent import LoopData
-from plugins.yatca.helpers.constants import CTX_TG_BOT, CTX_TG_BOT_CFG
+from usr.plugins.yatca.helpers.constants import CTX_TG_BOT, CTX_TG_BOT_CFG
 
 
 class YatcaContextPrompt(Extension):

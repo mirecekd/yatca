@@ -110,15 +110,23 @@ export const store = createStore("yatcaConfig", {
         this.testResults = null;
         try {
             const { callJsonApi } = await import("/js/api.js");
+            const { toastFrontendSuccess, toastFrontendError } = await import("/js/toast.js");
             const res = await callJsonApi(`${API_BASE}/test_connection`, {
                 bot: config.bots[idx],
             });
             this.testResults = res;
+            if (res.success !== false && res.ok !== false) {
+                toastFrontendSuccess("YATCA: connection test passed");
+            } else {
+                toastFrontendError("YATCA: connection test failed");
+            }
         } catch (e) {
+            const { toastFrontendError } = await import("/js/toast.js");
             this.testResults = {
                 success: false,
                 results: [{ test: "Connection", ok: false, message: String(e) }],
             };
+            toastFrontendError("YATCA: connection test error");
         }
         this.testing = null;
     },

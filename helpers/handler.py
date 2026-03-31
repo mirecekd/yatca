@@ -1084,7 +1084,11 @@ async def _download_attachments(bot, message: TgMessage, bot_name: str = "") -> 
         obj = getattr(message, attr, None)
         if not obj:
             continue
-        fname = getattr(obj, "file_name", None) or f"{prefix}_{obj.file_unique_id}{ext or ''}"
+        raw_name = getattr(obj, "file_name", None) or f"{prefix}_{obj.file_unique_id}{ext or ''}"
+        # Sanitize: strip path components to prevent directory traversal
+        fname = os.path.basename(raw_name).replace("..", "_")
+        if not fname:
+            fname = f"{prefix}_{obj.file_unique_id}{ext or ''}"
         path = await _dl(obj.file_id, fname)
         if path:
             paths.append(path)

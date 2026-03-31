@@ -1,13 +1,5 @@
 # YATCA -- Yet Another Telegram Connector for Agent-zero
 
----
-
-<div align="center">
-<img src="legacy/yatca_ghcover.jpg" alt="YATCA" width="60%">
-</div>
-
----
-
 A full-featured Telegram bot plugin for [Agent Zero](https://github.com/frdel/agent-zero). Send messages, photos, and files to your Agent Zero instance directly from Telegram.
 
 <div align="center">
@@ -136,13 +128,7 @@ yatca/                           # Repo root = plugin root
 |
 |-- prompts/                     # Prompt templates
 |-- api/                         # Webhook + test_connection endpoints
-|-- webui/                       # Settings panel (config.html + store.js)
-|
-+-- legacy/                      # v1 standalone deployment files
-    |-- telegram_bridge.py       # v1 standalone bridge
-    |-- yatca_run.sh             # v1 runner script
-    |-- yatca_startup.sh         # v1 installer script
-    +-- yatca_ghcover.jpg        # Cover image
++-- webui/                       # Settings panel (config.html + store.js + thumbnail)
 ```
 
 ---

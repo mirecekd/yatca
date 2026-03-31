@@ -618,8 +618,15 @@ async def handle_project(message: TgMessage, bot_name: str, bot_cfg: dict):
     if not _is_allowed(bot_cfg, user.id, user.username, message.chat.id):
         return
 
+    key = _map_key(bot_name, user.id, message.chat.id)
     ctx = _get_existing_context(bot_name, user.id, message.chat.id)
-    current = ctx.data.get(CTX_TG_PROJECT, "") if ctx else ""
+    # Read persisted project from state (survives context resets)
+    current = ""
+    if ctx:
+        current = ctx.data.get(CTX_TG_PROJECT, "")
+    if not current:
+        state = _load_state()
+        current = state.get("user_projects", {}).get(key, "")
 
     try:
         project_list = _a0_list_projects()
@@ -755,6 +762,12 @@ async def _callback_project_set(query: CallbackQuery, bot_name: str, bot_cfg: di
             old_ctx = AgentContext.get(old_ctx_id)
             if old_ctx:
                 old_ctx.reset()
+        # Store selected project in state so it persists across context resets
+        user_projects = state.setdefault("user_projects", {})
+        if project_name:
+            user_projects[key] = project_name
+        else:
+            user_projects.pop(key, None)
         _save_state(state)
 
     if project_name:
@@ -964,7 +977,10 @@ async def _get_or_create_context_from_user(
             ctx.data[CTX_TG_USER_ID] = user_id
             ctx.data[CTX_TG_USERNAME] = username or ""
 
-            project = _get_project(bot_cfg, user_id)
+            # Check persisted project from state first, then bot config
+            project = _load_state().get("user_projects", {}).get(key, "")
+            if not project:
+                project = _get_project(bot_cfg, user_id)
             if project:
                 ctx.data[CTX_TG_PROJECT] = project
                 projects.activate_project(ctx.id, project)

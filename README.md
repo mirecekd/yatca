@@ -64,6 +64,8 @@ The easiest way to install YATCA is to **paste the following instruction directl
 ```text
 Install YATCA into this Agent Zero container and configure it for autostart.
 
+Download repo from https://github.com/mirecekd/yatca
+
 Do the following exactly:
 
 1. Install Python dependencies into /opt/venv:

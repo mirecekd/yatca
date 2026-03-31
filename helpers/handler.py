@@ -7,7 +7,7 @@ Preserves the full YATCA command set:
   /context, /tasks, /project
 
 Uses the A0 plugin system's AgentContext for per-user sessions and
-the internal A0 API (via aiohttp + CSRF) for control commands.
+direct Python API calls for control commands (no HTTP/CSRF needed).
 """
 
 import json
@@ -17,7 +17,6 @@ import time
 import uuid
 from contextlib import asynccontextmanager, suppress
 
-import aiohttp
 from aiogram import Bot
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
@@ -84,113 +83,75 @@ def _map_key(bot_name: str, user_id: int, chat_id: int) -> str:
 
 
 # ---------------------------------------------------------------------------
-#  A0 Internal API Session Manager (CSRF-authenticated)
+#  Direct A0 Python API helpers (no HTTP/CSRF needed - we run inside A0)
 # ---------------------------------------------------------------------------
 
-class A0SessionManager:
-    """Manages authenticated session with A0 web UI (login + CSRF token)."""
+def _a0_pause_context(ctx: AgentContext, paused: bool):
+    """Pause or unpause an agent context directly."""
+    ctx.paused = paused
 
-    def __init__(self):
-        self._session: aiohttp.ClientSession | None = None
-        self._csrf_token: str = ""
 
-    def _get_a0_base(self, bot_cfg: dict) -> str:
-        """Get A0 API base URL from bot config or default."""
-        return bot_cfg.get("a0_api_base", "http://127.0.0.1:80")
+def _a0_nudge_context(ctx: AgentContext):
+    """Nudge (reset process chain) for a stuck agent context."""
+    ctx.reset_process()
 
-    def _get_credentials(self, bot_cfg: dict) -> tuple[str, str]:
-        """Get A0 web UI credentials from environment or bot config."""
-        login = os.getenv("AUTH_LOGIN", "")
-        password = os.getenv("AUTH_PASSWORD", "")
-        return login, password
 
-    async def _ensure_session(self, bot_cfg: dict):
-        if self._session is None or self._session.closed:
-            jar = aiohttp.CookieJar(unsafe=True)
-            self._session = aiohttp.ClientSession(cookie_jar=jar)
-            self._csrf_token = ""
+def _a0_get_context_window(ctx: AgentContext) -> dict:
+    """Get context window info directly from the context."""
+    try:
+        from helpers import ctx_window
+        content = ctx_window.get_ctx_window(ctx)
+        # Rough token estimate (4 chars per token)
+        tokens = len(content) // 4
+        return {"tokens": tokens, "content": content}
+    except Exception:
+        return {"tokens": 0, "content": ""}
 
-        if not self._csrf_token:
-            await self._login_and_get_csrf(bot_cfg)
 
-    async def _login_and_get_csrf(self, bot_cfg: dict):
-        base = self._get_a0_base(bot_cfg)
-        login, password = self._get_credentials(bot_cfg)
+def _a0_list_tasks() -> list[dict]:
+    """List scheduled tasks directly from A0 scheduler."""
+    try:
+        from helpers import scheduler
+        tasks = scheduler.get_tasks()
+        result = []
+        for t in tasks:
+            result.append({
+                "uuid": getattr(t, "uuid", getattr(t, "id", "?")),
+                "name": getattr(t, "name", "Unnamed"),
+                "state": getattr(t, "state", "unknown"),
+                "type": getattr(t, "type", "unknown"),
+                "next_run": str(getattr(t, "next_run", "")) or None,
+            })
+        return result
+    except Exception as e:
+        PrintStyle.error(f"YATCA: failed to list tasks: {e}")
+        return []
 
-        if login:
-            login_data = aiohttp.FormData()
-            login_data.add_field("username", login)
-            login_data.add_field("password", password)
-            async with self._session.post(
-                f"{base}/login", data=login_data,
-                timeout=aiohttp.ClientTimeout(total=15),
-                allow_redirects=False,
-            ) as resp:
-                if resp.status not in (200, 302):
-                    text = await resp.text()
-                    raise RuntimeError(f"A0 login failed HTTP {resp.status}: {text[:300]}")
-                PrintStyle.info("YATCA A0 session: logged in successfully")
 
-        headers = {"Origin": base, "Referer": f"{base}/"}
-        async with self._session.get(
-            f"{base}/csrf_token", headers=headers,
-            timeout=aiohttp.ClientTimeout(total=15),
-        ) as resp:
-            if resp.status == 200:
-                data = await resp.json()
-                self._csrf_token = data.get("token", "")
-                if self._csrf_token:
-                    PrintStyle.info(f"YATCA A0 session: CSRF token obtained ({self._csrf_token[:8]}...)")
-                else:
-                    raise RuntimeError("A0 CSRF token endpoint returned empty token")
+def _a0_run_task(task_id: str) -> dict:
+    """Run a scheduled task directly."""
+    try:
+        from helpers import scheduler
+        scheduler.run_task(task_id)
+        return {"success": True, "message": "Task started."}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
+
+def _a0_list_projects() -> list[dict]:
+    """List A0 projects directly."""
+    try:
+        project_list = projects.list_projects()
+        result = []
+        for p in project_list:
+            if isinstance(p, dict):
+                result.append(p)
             else:
-                text = await resp.text()
-                raise RuntimeError(f"A0 CSRF token request failed HTTP {resp.status}: {text[:300]}")
-
-    async def api_call(self, endpoint: str, payload: dict, bot_cfg: dict, timeout: int = 30) -> dict:
-        await self._ensure_session(bot_cfg)
-        base = self._get_a0_base(bot_cfg)
-        url = f"{base}/{endpoint}"
-        headers = {
-            "Content-Type": "application/json",
-            "X-CSRF-Token": self._csrf_token,
-            "X-Forwarded-For": "127.0.0.1",
-            "X-Real-IP": "127.0.0.1",
-        }
-        async with self._session.post(
-            url, json=payload, headers=headers,
-            timeout=aiohttp.ClientTimeout(total=timeout),
-        ) as resp:
-            if resp.status == 403:
-                PrintStyle.warning(f"YATCA A0 API {endpoint}: 403 -- re-authenticating...")
-                self._csrf_token = ""
-                await self._ensure_session(bot_cfg)
-                headers["X-CSRF-Token"] = self._csrf_token
-                async with self._session.post(
-                    url, json=payload, headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=timeout),
-                ) as retry_resp:
-                    if retry_resp.status == 200:
-                        return await retry_resp.json()
-                    else:
-                        error_text = await retry_resp.text()
-                        raise RuntimeError(f"A0 API {endpoint} returned HTTP {retry_resp.status}: {error_text[:500]}")
-            elif resp.status == 200:
-                return await resp.json()
-            else:
-                error_text = await resp.text()
-                raise RuntimeError(f"A0 API {endpoint} returned HTTP {resp.status}: {error_text[:500]}")
-
-    async def close(self):
-        if self._session and not self._session.closed:
-            await self._session.close()
-
-
-_a0_session = A0SessionManager()
-
-
-async def a0_api_call(endpoint: str, payload: dict, bot_cfg: dict, timeout: int = 30) -> dict:
-    return await _a0_session.api_call(endpoint, payload, bot_cfg, timeout)
+                result.append({"name": str(p), "title": str(p)})
+        return result
+    except Exception as e:
+        PrintStyle.error(f"YATCA: failed to list projects: {e}")
+        return []
 
 
 # ---------------------------------------------------------------------------
@@ -438,7 +399,7 @@ async def handle_stop(message: TgMessage, bot_name: str, bot_cfg: dict):
         return
 
     try:
-        await a0_api_call("pause", {"paused": True, "context": ctx.id}, bot_cfg)
+        _a0_pause_context(ctx, True)
         instance = get_bot(bot_name)
         if instance:
             await _send_with_temp_bot(
@@ -473,7 +434,7 @@ async def handle_resume(message: TgMessage, bot_name: str, bot_cfg: dict):
         return
 
     try:
-        await a0_api_call("pause", {"paused": False, "context": ctx.id}, bot_cfg)
+        _a0_pause_context(ctx, False)
         instance = get_bot(bot_name)
         if instance:
             await _send_with_temp_bot(
@@ -506,8 +467,8 @@ async def handle_nudge(message: TgMessage, bot_name: str, bot_cfg: dict):
         return
 
     try:
-        data = await a0_api_call("nudge", {"ctxid": ctx.id}, bot_cfg)
-        msg = data.get("message", "Agent nudged.")
+        _a0_nudge_context(ctx)
+        msg = "Agent process chain reset."
         instance = get_bot(bot_name)
         if instance:
             await _send_with_temp_bot(
@@ -540,7 +501,7 @@ async def handle_context(message: TgMessage, bot_name: str, bot_cfg: dict):
         return
 
     try:
-        data = await a0_api_call("ctx_window_get", {"context": ctx.id}, bot_cfg)
+        data = _a0_get_context_window(ctx)
         tokens_used = data.get("tokens", 0)
         content_len = len(data.get("content", ""))
         tokens_fmt = f"{tokens_used:,}"
@@ -573,8 +534,7 @@ async def handle_tasks(message: TgMessage, bot_name: str, bot_cfg: dict):
         return
 
     try:
-        data = await a0_api_call("scheduler_tasks_list", {}, bot_cfg)
-        tasks = data.get("tasks", [])
+        tasks = _a0_list_tasks()
         if not tasks:
             instance = get_bot(bot_name)
             if instance:
@@ -657,8 +617,7 @@ async def handle_project(message: TgMessage, bot_name: str, bot_cfg: dict):
     current = ctx.data.get(CTX_TG_PROJECT, "") if ctx else ""
 
     try:
-        data = await a0_api_call("projects", {"action": "list"}, bot_cfg)
-        project_list = data.get("data", [])
+        project_list = _a0_list_projects()
 
         if current:
             header = f"Current project: <b>{current}</b>"
@@ -750,7 +709,7 @@ async def _callback_task_run(query: CallbackQuery, bot_name: str, bot_cfg: dict,
     """Run a scheduled task from inline button."""
     task_id = cb_data.split(":", 1)[1]
     try:
-        data = await a0_api_call("scheduler_task_run", {"task_id": task_id}, bot_cfg)
+        data = _a0_run_task(task_id)
         if data.get("success"):
             msg = data.get("message", "Task started.")
             await query.message.edit_text(

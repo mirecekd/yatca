@@ -1,28 +1,31 @@
-/**
- * YATCA WebUI Alpine.js store for the settings modal.
- */
+import { createStore } from "/js/AlpineStore.js";
 
-import Alpine from "alpinejs";
+const API_BASE = "/plugins/yatca";
 
-const PLUGIN_NAME = "yatca";
+export const store = createStore("yatcaConfig", {
+    projects: [],
+    expandedIdx: null,
+    testing: null,
+    testResults: null,
+    _loaded: false,
 
-Alpine.store("yatcaConfig", {
-    config: null,
-
-    init() {
-        this.config = Alpine.store("pluginSettings")?.getPluginConfig(PLUGIN_NAME);
+    async init() {
+        if (this._loaded) return;
+        try {
+            const { callJsonApi } = await import("/js/api.js");
+            const res = await callJsonApi("projects", { action: "list" });
+            this.projects = res.data || [];
+        } catch (_) {
+            this.projects = [];
+        }
+        this._loaded = true;
     },
 
-    get bots() {
-        return this.config?.bots || [];
-    },
-
-    addBot() {
-        if (!this.config) return;
-        if (!this.config.bots) this.config.bots = [];
-        this.config.bots.push({
-            name: `bot_${this.config.bots.length + 1}`,
+    defaultBot() {
+        return {
+            name: "",
             enabled: true,
+            notify_messages: false,
             token: "",
             mode: "polling",
             webhook_url: "",
@@ -37,57 +40,86 @@ Alpine.store("yatcaConfig", {
             attachment_max_age_hours: 0,
             max_file_size_mb: 20,
             a0_timeout: 300,
-            notify_messages: false,
             agent_instructions: "",
-        });
+        };
     },
 
-    removeBot(index) {
-        if (!this.config?.bots) return;
-        this.config.bots.splice(index, 1);
+    addBot(config) {
+        if (!config.bots) config.bots = [];
+        const bot = this.defaultBot();
+        bot.name = "bot_" + (config.bots.length + 1);
+        config.bots.push(bot);
+        this.expandedIdx = config.bots.length - 1;
     },
 
-    async testToken(index) {
-        const bot = this.config?.bots?.[index];
-        if (!bot?.token) return;
-
-        bot._testing = true;
-        bot._testResult = "";
-        try {
-            const resp = await fetch(`/api/plugins/${PLUGIN_NAME}/test_connection`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ token: bot.token }),
-            });
-            const data = await resp.json();
-            bot._testResult = data.ok ? `OK: ${data.message}` : `FAIL: ${data.message}`;
-        } catch (e) {
-            bot._testResult = `Error: ${e.message}`;
-        }
-        bot._testing = false;
+    removeBot(config, idx) {
+        config.bots.splice(idx, 1);
+        this.expandedIdx = null;
     },
 
-    allowedUsersStr(bot) {
+    toggle(idx) {
+        this.expandedIdx = this.expandedIdx === idx ? null : idx;
+        this.testResults = null;
+    },
+
+    whitelistText(bot) {
         return (bot.allowed_users || []).join(", ");
     },
 
-    setAllowedUsers(bot, str) {
-        bot.allowed_users = str
+    setWhitelist(bot, val) {
+        bot.allowed_users = val
             .split(",")
             .map((s) => s.trim())
-            .filter(Boolean);
+            .filter((s) => s);
     },
 
-    allowedChatsStr(bot) {
+    allowedChatsText(bot) {
         return (bot.allowed_chats || []).join(", ");
     },
 
-    setAllowedChats(bot, str) {
-        bot.allowed_chats = str
+    setAllowedChats(bot, val) {
+        bot.allowed_chats = val
             .split(",")
             .map((s) => s.trim())
-            .filter(Boolean);
+            .filter((s) => s);
+    },
+
+    userProjectsText(bot) {
+        const up = bot.user_projects || {};
+        return Object.entries(up)
+            .map(([k, v]) => k + "=" + v)
+            .join(", ");
+    },
+
+    setUserProjects(bot, val) {
+        const obj = {};
+        val
+            .split(",")
+            .map((s) => s.trim())
+            .filter((s) => s)
+            .forEach((item) => {
+                const parts = item.split("=").map((p) => p.trim());
+                const k = parts[0];
+                if (k) obj[k] = parts[1] || "";
+            });
+        bot.user_projects = obj;
+    },
+
+    async testConnection(config, idx) {
+        this.testing = idx;
+        this.testResults = null;
+        try {
+            const { callJsonApi } = await import("/js/api.js");
+            const res = await callJsonApi(`${API_BASE}/test_connection`, {
+                bot: config.bots[idx],
+            });
+            this.testResults = res;
+        } catch (e) {
+            this.testResults = {
+                success: false,
+                results: [{ test: "Connection", ok: false, message: String(e) }],
+            };
+        }
+        this.testing = null;
     },
 });
-
-export const store = Alpine.store("yatcaConfig");

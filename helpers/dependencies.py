@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
+import os
 import shutil
 import subprocess
 import sys
@@ -44,6 +45,17 @@ def ensure_dependencies() -> None:
         _CHECKED = True
 
 
+# Agent Zero convention: target the agent venv Python, fall back to sys.executable
+_AGENT_VENV_PYTHON = "/opt/venv/bin/python"
+
+
+def _get_python_target() -> str:
+    """Return the Python interpreter to install packages into."""
+    if os.path.isfile(_AGENT_VENV_PYTHON):
+        return _AGENT_VENV_PYTHON
+    return sys.executable
+
+
 def _install_deps() -> None:
     uv = shutil.which("uv")
     if not uv:
@@ -51,12 +63,13 @@ def _install_deps() -> None:
     if not _REQUIREMENTS_FILE.is_file():
         raise RuntimeError(f"YATCA plugin requirements file not found: {_REQUIREMENTS_FILE}")
 
+    python_target = _get_python_target()
     cmd = [
         uv,
         "pip",
         "install",
         "--python",
-        sys.executable,
+        python_target,
         "-r",
         str(_REQUIREMENTS_FILE),
     ]

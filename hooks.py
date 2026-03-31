@@ -16,7 +16,6 @@ from pathlib import Path
 
 _PLUGIN_DIR = Path(__file__).resolve().parent
 _REQUIREMENTS_FILE = _PLUGIN_DIR / "requirements.txt"
-_AGENT_VENV_PYTHON = "/opt/venv/bin/python"
 
 
 def install():
@@ -28,14 +27,12 @@ def install():
     if not uv:
         return
 
-    python_target = _AGENT_VENV_PYTHON if os.path.isfile(_AGENT_VENV_PYTHON) else sys.executable
-
     cmd = [
         uv,
         "pip",
         "install",
         "--python",
-        python_target,
+        sys.executable,
         "-r",
         str(_REQUIREMENTS_FILE),
     ]

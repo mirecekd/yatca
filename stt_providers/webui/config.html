@@ -1,0 +1,94 @@
+<html>
+<head>
+  <title>STT Providers Settings</title>
+  <script type="module">
+    import { store } from "/components/plugins/plugin-settings-store.js";
+  </script>
+  <style>
+    .stt-section { margin-bottom: 1.5rem; }
+    .stt-section h4 { margin: 0 0 0.75rem 0; font-size: 0.9rem; font-weight: 600; color: var(--text-secondary, #aaa); text-transform: uppercase; letter-spacing: 0.05em; }
+    .field-row { display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 0.85rem; }
+    .field-row label { font-size: 0.85rem; color: var(--text-secondary, #aaa); }
+    .field-row input, .field-row select { width: 100%; padding: 0.45rem 0.6rem; background: var(--input-bg, #1e1e2e); border: 1px solid var(--border, #333); border-radius: 6px; color: var(--text-primary, #eee); font-size: 0.9rem; }
+    .field-row input:focus, .field-row select:focus { outline: none; border-color: var(--accent, #6c8ebf); }
+    .badge { display: inline-block; font-size: 0.7rem; padding: 0.15rem 0.4rem; border-radius: 4px; margin-left: 0.4rem; background: var(--accent-muted, #2a3a5a); color: var(--accent, #6c8ebf); }
+    .hint { font-size: 0.75rem; color: var(--text-muted, #666); margin-top: 0.2rem; }
+    a { color: var(--accent, #6c8ebf); }
+  </style>
+</head>
+<body>
+  <div x-data>
+
+    <!-- Provider Selection -->
+    <div class="stt-section">
+      <h4>Provider</h4>
+      <div class="field-row">
+        <label>Speech-to-Text Provider</label>
+        <select x-model="config.provider">
+          <option value="local">🏠 Local Whisper (built-in, no API key needed)</option>
+          <option value="deepgram">🎙️ Deepgram (nova-2, nova-3)</option>
+          <option value="openai">🤖 OpenAI Whisper API (whisper-1)</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Deepgram Settings -->
+    <div class="stt-section" x-show="config.provider === 'deepgram'">
+      <h4>Deepgram Settings <span class="badge">deepgram.com</span></h4>
+      <div class="field-row">
+        <label>API Key</label>
+        <input type="password" x-model="config.deepgram.api_key" placeholder="Enter Deepgram API key..." />
+        <span class="hint">Get your key at <a href="https://console.deepgram.com" target="_blank">console.deepgram.com</a></span>
+      </div>
+      <div class="field-row">
+        <label>Model</label>
+        <select x-model="config.deepgram.model">
+          <option value="nova-2">nova-2 (recommended — fast &amp; accurate)</option>
+          <option value="nova-2-general">nova-2-general</option>
+          <option value="nova-2-meeting">nova-2-meeting (optimized for meetings)</option>
+          <option value="nova-2-phonecall">nova-2-phonecall (optimized for calls)</option>
+          <option value="nova-3">nova-3 (latest)</option>
+          <option value="enhanced">enhanced</option>
+          <option value="base">base</option>
+        </select>
+      </div>
+      <div class="field-row">
+        <label>Language</label>
+        <input type="text" x-model="config.deepgram.language" placeholder="e.g. cs, en, de — empty = auto-detect" />
+        <span class="hint">ISO 639-1 code. Leave empty for automatic language detection.</span>
+      </div>
+    </div>
+
+    <!-- OpenAI Settings -->
+    <div class="stt-section" x-show="config.provider === 'openai'">
+      <h4>OpenAI Settings <span class="badge">openai.com</span></h4>
+      <div class="field-row">
+        <label>API Key</label>
+        <input type="password" x-model="config.openai.api_key" placeholder="Enter OpenAI API key (sk-...)" />
+        <span class="hint">Get your key at <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com</a></span>
+      </div>
+      <div class="field-row">
+        <label>Model</label>
+        <select x-model="config.openai.model">
+          <option value="whisper-1">whisper-1</option>
+        </select>
+      </div>
+      <div class="field-row">
+        <label>Language</label>
+        <input type="text" x-model="config.openai.language" placeholder="e.g. cs, en, de — empty = auto-detect" />
+        <span class="hint">ISO 639-1 code. Leave empty for automatic language detection.</span>
+      </div>
+    </div>
+
+    <!-- Local Whisper Info -->
+    <div class="stt-section" x-show="!config.provider || config.provider === 'local'">
+      <h4>Local Whisper</h4>
+      <p style="font-size:0.85rem;color:var(--text-secondary,#aaa);margin:0">
+        Using the built-in Whisper model. Configure model size and language in
+        <strong>Agent Settings &rarr; Speech</strong>.
+      </p>
+    </div>
+
+  </div>
+</body>
+</html>

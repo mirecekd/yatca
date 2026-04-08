@@ -1,0 +1,14 @@
+# STT Providers Plugin - Default Configuration
+provider: local  # local, deepgram, openai
+
+deepgram:
+  api_key: ""
+  model: nova-2
+  language: cs
+  # Available models: nova-2, nova-2-general, nova-2-meeting, nova-2-phonecall, nova-3, enhanced, base
+
+openai:
+  api_key: ""
+  model: whisper-1
+  language: cs
+  # language: empty string = auto-detect

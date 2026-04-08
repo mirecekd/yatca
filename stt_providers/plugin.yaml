@@ -1,0 +1,8 @@
+name: stt_providers
+title: "STT Providers - Multi-Provider Speech to Text"
+description: Replaces the built-in Whisper STT with cloud providers. Supports Deepgram (nova-2, nova-3) and OpenAI Whisper API. Falls back to local Whisper when unconfigured.
+version: 1.0.0
+settings_sections:
+  - agent
+per_project_config: false
+per_agent_config: false
